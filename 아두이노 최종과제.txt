@@ -1,0 +1,115 @@
+#include <MPU6050_tockn.h> 
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <LedControl.h>
+
+MPU6050 mpu6050(Wire);
+
+LedControl Dote = LedControl(10,12,11,1);  //DIN(10핀), CLK(12핀), CS(11핀), 1
+
+byte digits[2][8] =   // 도트매트릭스로 2개의 표정을 표현하고 방식은 2진법으로 숫자표기
+{
+  {
+    B00011000,       
+    B00011000,
+    B00011000,
+    B00011000,
+    B00011000,
+    B00000000,
+    B00011000,
+    B00011000        // 느낌표 표시
+  },
+  {
+    B00000000,
+    B01100110,
+    B01100110,
+    B00000000,
+    B10000001,
+    B10000001,
+    B01111110,
+    B00000000        // 웃는표시
+  }
+};
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // lcd 한줄에 16개의 문자 입력가능하고 총 2줄 표현
+
+const int ledPin1 = 4;   // led 4번핀
+const int ledPin2 = 5;   // led 5번핀
+const int ledPin3 = 6;   // led 6번핀
+const int buzzerPin = 8;  // 자동 부저 8번핀
+
+float lastAngleX = 0.0;   
+float lastAngleY = 0.0;
+float lastAngleZ = 0.0;  // 각도 초기화
+
+void setup() {
+  Serial.begin(9600); 
+  Wire.begin();
+  mpu6050.begin();
+  mpu6050.calcGyroOffsets(true);
+
+  lcd.init();
+  lcd.backlight();  // lcd 초기화
+
+  pinMode(ledPin1, OUTPUT);    
+  pinMode(ledPin2, OUTPUT);
+  pinMode(ledPin3, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);  // led 및 부저 출력
+
+  Dote.shutdown(0,false);
+  Dote.setIntensity(0,5);
+  Dote.clearDisplay(0);    // 도트매트릭스 밝기 5 및 초기화
+    
+  lastAngleX = mpu6050.getAngleX();
+  lastAngleY = mpu6050.getAngleY();
+  lastAngleZ = mpu6050.getAngleZ();   
+}
+
+void loop() {
+  mpu6050.update();
+  
+  float currentAngleX = mpu6050.getAngleX();
+  float currentAngleY = mpu6050.getAngleY();
+  float currentAngleZ = mpu6050.getAngleZ();
+  
+  if (abs(currentAngleX - lastAngleX) > 15.0 || 
+      abs(currentAngleY - lastAngleY) > 15.0 || 
+      abs(currentAngleZ - lastAngleZ) > 15.0) {     // 절대값으로 표현된 변화된 값이 15도를 초과하면 
+    lcd.setCursor(0, 0);
+    lcd.print("WARNING!!!!!!!!!");
+    lcd.setCursor(0, 1);
+    lcd.print("Evacuate People!!");                     // warning 및 evacuate people 표기
+
+    digitalWrite(ledPin1, HIGH); 
+    digitalWrite(ledPin2, HIGH); 
+    digitalWrite(ledPin3, HIGH);
+    tone(buzzerPin, 1000);                          //  led 3개 켜기 및 부저 주파수 1000 크기로 출력
+          
+    for(int i =0;i<8;i++) {
+      Dote.setColumn(0,i,digits[0][i]);            // 도트매트릭스상에 느낌표 표시
+    }
+             
+
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Detecting........");
+    lcd.setCursor(0, 1);
+    lcd.print("                ");               // 흔들림의 값이 15보다 작으면 Detecting 표기
+
+    digitalWrite(ledPin1, LOW); 
+    digitalWrite(ledPin2, LOW); 
+    digitalWrite(ledPin3, LOW);
+    noTone(buzzerPin);                  // led 3개 및 자동 부저 출력 정지
+
+    for(int i=0;i<8;i++) {
+      Dote.setColumn(0,i,digits[1][i]);    // 도트매트릭스상에 웃는 얼굴 표시
+    }
+
+  }
+  
+  lastAngleX = currentAngleX;
+  lastAngleY = currentAngleY;
+  lastAngleZ = currentAngleZ;        // 마지막 각도는 현재각도
+  
+  delay(1000);
+}
